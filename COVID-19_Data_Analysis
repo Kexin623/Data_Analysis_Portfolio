@@ -1,0 +1,145 @@
+SELECT location,
+       date,
+       total_cases,
+       new_cases,
+       total_deaths,
+       population
+  FROM CovidDeaths_2023
+ ORDER BY 1,
+          2;
+
+SELECT location,
+       date,
+       total_deaths,
+       total_cases,
+       CAST (total_deaths AS FLOAT) / CAST (total_cases AS FLOAT) * 100 AS DeathPercentage
+  FROM CovidDeaths_2023
+ WHERE location LIKE '%states%';
+
+SELECT location,
+       date,
+       population,
+       total_cases,
+       CAST (total_cases AS FLOAT) / CAST (population AS FLOAT) * 100 AS InfectedPercentage
+  FROM CovidDeaths_2023
+ WHERE location LIKE '%states%';
+
+SELECT location,
+       population,
+       max(total_cases) AS HighestInfectionCount,
+       CAST (max(total_cases) AS FLOAT) / CAST (population AS FLOAT) * 100 AS InfectedPercentage
+  FROM CovidDeaths_2023
+ GROUP BY location
+ ORDER BY InfectedPercentage DESC;
+
+SELECT location,
+       max(total_deaths) AS TotalDeathCount
+  FROM CovidDeaths_2023
+ WHERE continent IS NOT NULL
+ GROUP BY location
+ ORDER BY TotalDeathCount DESC;
+
+SELECT continent,
+       max(total_deaths) AS TotalDeathCount
+  FROM CovidDeaths_2023
+ WHERE continent IS NOT NULL
+ GROUP BY continent
+ ORDER BY TotalDeathCount DESC;
+
+SELECT location,
+       max(total_deaths) AS TotalDeathCount
+  FROM CovidDeaths_2023
+ WHERE continent IS NULL
+ GROUP BY location
+ ORDER BY TotalDeathCount DESC;
+
+SELECT continent,
+       max(total_deaths) AS TotalDeathCount,
+       population,
+       CAST (max(total_cases) AS FLOAT) / CAST (population AS FLOAT) * 100 AS InfectedPercentage
+  FROM CovidDeaths_2023
+ WHERE continent IS NOT NULL
+ GROUP BY continent
+ ORDER BY TotalDeathCount DESC;-- gloabl numbers
+
+SELECT sum(new_cases) AS total_cases,
+       sum(new_deaths) AS total_deaths,
+       CAST (sum(new_deaths) AS FLOAT) / CAST (sum(new_cases) AS FLOAT) * 100 AS DeathPercentage
+  FROM CovidDeaths_2023
+ WHERE continent IS NOT NULL;-- join coviddeath and covid vaccinations together
+
+SELECT dea.continent,
+       dea.location,
+       dea.date,
+       dea.population,
+       vac.new_vaccinations
+  FROM CovidDeaths_2023 AS dea
+       JOIN
+       CovidVaccinations_2023 AS vac ON dea.location = vac.location AND 
+                                        dea.date = vac.date
+ WHERE dea.continent IS NOT NULL;
+
+SELECT dea.location,
+       min(dea.date),
+       vac.new_vaccinations
+  FROM CovidDeaths_2023 AS dea
+       JOIN
+       CovidVaccinations_2023 AS vac ON dea.location = vac.location AND 
+                                        dea.date = vac.date
+ WHERE dea.continent IS NOT NULL AND 
+       vac.new_vaccinations IS NOT NULL
+ GROUP BY dea.location;
+
+SELECT dea.continent,
+       dea.location,
+       dea.date,
+       dea.population,
+       vac.new_vaccinations,
+       sum(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,
+       dea.date) AS RollingPeopleVaccinated
+  FROM CovidDeaths_2023 AS dea
+       JOIN
+       CovidVaccinations_2023 AS vac ON dea.location = vac.location AND 
+                                        dea.date = vac.date
+ WHERE dea.continent IS NOT NULL AND 
+       vac.new_vaccinations IS NOT NULL;-- CTE
+
+WITH PopVac AS (
+    SELECT dea.continent,
+           dea.location,
+           dea.date,
+           dea.population,
+           vac.new_vaccinations,
+           sum(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,
+           dea.date) AS RollingPeopleVaccinated
+      FROM CovidDeaths_2023 AS dea
+           JOIN
+           CovidVaccinations_2023 AS vac ON dea.location = vac.location AND 
+                                            dea.date = vac.date
+     WHERE dea.continent IS NOT NULL
+)
+SELECT *,
+       CAST (RollingPeopleVaccinated AS FLOAT) / CAST (population AS FLOAT) * 100 AS percentage
+  FROM PopVac;-- creating view to store data for later visualizations
+
+CREATE VIEW PrecentPopulationVaccinated AS
+    SELECT dea.continent,
+           dea.location,
+           dea.date,
+           dea.population,
+           vac.new_vaccinations,
+           sum(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,
+           dea.date) AS RollingPeopleVaccinated
+      FROM CovidDeaths_2023 AS dea
+           JOIN
+           CovidVaccinations_2023 AS vac ON dea.location = vac.location AND 
+                                            dea.date = vac.date
+     WHERE dea.continent IS NOT NULL AND 
+           vac.new_vaccinations IS NOT NULL;
+
+CREATE TABLE sec2 AS SELECT *,
+                            CASE WHEN Industry = 'Sovereign' AND 
+                                      Security_Type = 'Bond' THEN 'Level_1_Asset' WHEN Industry NOT IN ('Financial', 'Sovereign') AND 
+                                                                                       Security_Type IN ('Equity', 'Bond') AND 
+                                                                                       Issuer_Credit_Rating IN ('A', 'AA', 'AAA') THEN 'Level_2_Asset' ELSE 'Level_3_Asset' END AS level_of_asset
+                       FROM Security;
